@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Large Rooftops Viewer</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Custom CSS -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .container {
+            display: flex;
+            height: calc(100vh - 120px);
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: white;
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        
+        .controls {
+            padding: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .filter-group {
+            margin-bottom: 15px;
+        }
+        
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .filter-group input, .filter-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .stats {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-weight: 600;
+            color: #666;
+        }
+        
+        .stat-value {
+            color: #333;
+            font-weight: bold;
+        }
+        
+        .buildings-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .building-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .building-item:hover {
+            background: #f8f9fa;
+        }
+        
+        .building-item.selected {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .building-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        
+        .building-details {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        .building-area {
+            font-size: 14px;
+            color: #1976d2;
+            font-weight: bold;
+            margin-top: 5px;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .popup-content {
+            max-width: 250px;
+        }
+        
+        .popup-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 8px;
+        }
+        
+        .popup-detail {
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+        
+        .popup-links {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+        
+        .popup-links a {
+            display: inline-block;
+            margin-right: 10px;
+            color: #1976d2;
+            text-decoration: none;
+            font-size: 11px;
+        }
+        
+        .popup-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 1000;
+        }
+        
+        .error {
+            color: #d32f2f;
+            background: #ffebee;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 4px;
+            border-left: 4px solid #d32f2f;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏢 Au SG - Large Rooftops</h1>
+        <p>Interactive viewer for potential solar panel installation sites</p>
+    </div>
+    
+    <div class="container">
+        <div class="sidebar">
+            <div class="controls">
+                <div class="filter-group">
+                    <label for="minArea">Minimum Area (m²):</label>
+                    <input type="number" id="minArea" value="100" min="0" step="50">
+                </div>
+                
+                <div class="filter-group">
+                    <label for="buildingType">Building Type:</label>
+                    <select id="buildingType">
+                        <option value="">All Types</option>
+                    </select>
+                </div>
+                
+                <div class="filter-group">
+                    <label for="searchName">Search by Name:</label>
+                    <input type="text" id="searchName" placeholder="Enter building name...">
+                </div>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">Total Buildings:</span>
+                    <span class="stat-value" id="totalCount">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Filtered:</span>
+                    <span class="stat-value" id="filteredCount">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Area:</span>
+                    <span class="stat-value" id="totalArea">0 m²</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Avg Area:</span>
+                    <span class="stat-value" id="avgArea">0 m²</span>
+                </div>
+            </div>
+            
+            <div class="buildings-list" id="buildingsList">
+                <!-- Buildings will be populated here -->
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div class="loading" id="loading">
+                <div>Loading rooftop data...</div>
+            </div>
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        let map;
+        let buildingsData = [];
+        let markersLayer;
+        let selectedBuilding = null;
+        
+        // Initialize the map
+        function initMap() {
+            map = L.map('map').setView([47.4319, 9.6397], 12);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+            
+            markersLayer = L.layerGroup().addTo(map);
+        }
+        
+        // Load and parse CSV data
+        async function loadData() {
+            try {
+                const response = await fetch('out/au_sg_big_roofs.csv');
+                const csvText = await response.text();
+                const data = parseCSV(csvText);
+                buildingsData = data;
+                
+                populateBuildingTypes();
+                applyFilters();
+                document.getElementById('loading').style.display = 'none';
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('loading').innerHTML = 
+                    '<div class="error">Error loading data. Make sure the CSV file exists.</div>';
+            }
+        }
+        
+        // Simple CSV parser
+        function parseCSV(text) {
+            const lines = text.split('\n').filter(line => line.trim());
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            const data = [];
+            
+            for (let i = 1; i < lines.length; i++) {
+                const values = lines[i].split(',');
+                if (values.length >= headers.length) {
+                    const row = {};
+                    headers.forEach((header, index) => {
+                        row[header] = values[index] ? values[index].trim().replace(/"/g, '') : '';
+                    });
+                    data.push(row);
+                }
+            }
+            
+            return data;
+        }
+        
+        // Populate building types dropdown
+        function populateBuildingTypes() {
+            const types = [...new Set(buildingsData.map(b => b.building_tag).filter(t => t))];
+            const select = document.getElementById('buildingType');
+            
+            types.forEach(type => {
+                const option = document.createElement('option');
+                option.value = type;
+                option.textContent = type;
+                select.appendChild(option);
+            });
+        }
+        
+        // Apply filters and update display
+        function applyFilters() {
+            const minArea = parseFloat(document.getElementById('minArea').value) || 0;
+            const buildingType = document.getElementById('buildingType').value;
+            const searchName = document.getElementById('searchName').value.toLowerCase();
+            
+            const filtered = buildingsData.filter(building => {
+                const area = parseFloat(building.area_m2) || 0;
+                const type = building.building_tag || '';
+                const name = (building.name || '').toLowerCase();
+                
+                return area >= minArea &&
+                       (buildingType === '' || type === buildingType) &&
+                       (searchName === '' || name.includes(searchName));
+            });
+            
+            updateMap(filtered);
+            updateBuildingsList(filtered);
+            updateStats(filtered);
+        }
+        
+        // Update map markers
+        function updateMap(buildings) {
+            markersLayer.clearLayers();
+            
+            buildings.forEach(building => {
+                const lat = parseFloat(building.lat);
+                const lon = parseFloat(building.lon);
+                const area = parseFloat(building.area_m2);
+                
+                if (lat && lon) {
+                    // Size marker based on area
+                    const radius = Math.max(5, Math.min(20, Math.sqrt(area) / 10));
+                    
+                    const marker = L.circleMarker([lat, lon], {
+                        radius: radius,
+                        fillColor: getColorByArea(area),
+                        color: '#333',
+                        weight: 1,
+                        opacity: 0.8,
+                        fillOpacity: 0.6
+                    });
+                    
+                    const popupContent = createPopupContent(building);
+                    marker.bindPopup(popupContent);
+                    
+                    marker.on('click', () => selectBuilding(building));
+                    
+                    markersLayer.addLayer(marker);
+                }
+            });
+        }
+        
+        // Get color based on area
+        function getColorByArea(area) {
+            if (area < 200) return '#4CAF50';      // Green
+            if (area < 500) return '#FF9800';      // Orange  
+            if (area < 1000) return '#F44336';     // Red
+            return '#9C27B0';                      // Purple
+        }
+        
+        // Create popup content
+        function createPopupContent(building) {
+            return `
+                <div class="popup-content">
+                    <div class="popup-title">${building.name || 'Unnamed Building'}</div>
+                    <div class="popup-detail"><strong>Type:</strong> ${building.building_tag || 'Unknown'}</div>
+                    <div class="popup-detail"><strong>Area:</strong> ${parseFloat(building.area_m2).toLocaleString()} m²</div>
+                    <div class="popup-detail"><strong>Compactness:</strong> ${parseFloat(building.compactness).toFixed(3)}</div>
+                    <div class="popup-detail"><strong>Score:</strong> ${parseFloat(building.score).toLocaleString()}</div>
+                    <div class="popup-links">
+                        <a href="${building.google_maps}" target="_blank">📍 Google Maps</a>
+                        <a href="${building.osm_url}" target="_blank">🗺️ OpenStreetMap</a>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Update buildings list
+        function updateBuildingsList(buildings) {
+            const container = document.getElementById('buildingsList');
+            container.innerHTML = '';
+            
+            buildings.sort((a, b) => parseFloat(b.area_m2) - parseFloat(a.area_m2));
+            
+            buildings.forEach(building => {
+                const item = document.createElement('div');
+                item.className = 'building-item';
+                item.onclick = () => selectBuilding(building);
+                
+                item.innerHTML = `
+                    <div class="building-name">${building.name || 'Unnamed Building'}</div>
+                    <div class="building-details">
+                        Type: ${building.building_tag || 'Unknown'} | 
+                        Score: ${parseFloat(building.score).toLocaleString()}
+                    </div>
+                    <div class="building-area">${parseFloat(building.area_m2).toLocaleString()} m²</div>
+                `;
+                
+                container.appendChild(item);
+            });
+        }
+        
+        // Select a building
+        function selectBuilding(building) {
+            // Remove previous selection
+            document.querySelectorAll('.building-item.selected').forEach(item => {
+                item.classList.remove('selected');
+            });
+            
+            // Add selection to current item
+            event.target.closest('.building-item')?.classList.add('selected');
+            
+            // Center map on building
+            const lat = parseFloat(building.lat);
+            const lon = parseFloat(building.lon);
+            if (lat && lon) {
+                map.setView([lat, lon], 16);
+            }
+            
+            selectedBuilding = building;
+        }
+        
+        // Update statistics
+        function updateStats(buildings) {
+            const totalCount = buildingsData.length;
+            const filteredCount = buildings.length;
+            const totalArea = buildings.reduce((sum, b) => sum + parseFloat(b.area_m2 || 0), 0);
+            const avgArea = filteredCount > 0 ? totalArea / filteredCount : 0;
+            
+            document.getElementById('totalCount').textContent = totalCount.toLocaleString();
+            document.getElementById('filteredCount').textContent = filteredCount.toLocaleString();
+            document.getElementById('totalArea').textContent = totalArea.toLocaleString() + ' m²';
+            document.getElementById('avgArea').textContent = Math.round(avgArea).toLocaleString() + ' m²';
+        }
+        
+        // Event listeners
+        document.getElementById('minArea').addEventListener('input', applyFilters);
+        document.getElementById('buildingType').addEventListener('change', applyFilters);
+        document.getElementById('searchName').addEventListener('input', applyFilters);
+        
+        // Initialize everything
+        initMap();
+        loadData();
+    </script>
+</body>
+</html>
